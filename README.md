@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <a href="https://peterslijkhuis.github.io/QualtricsToLimeSurvey/"><img src="https://img.shields.io/badge/Open%20the%20converter-0071e3?style=for-the-badge&logo=githubpages&logoColor=white" alt="Open the converter"></a>
+  <a href="https://thebmslab.github.io/QualtricsToLimeSurvey/"><img src="https://img.shields.io/badge/Open%20the%20converter-0071e3?style=for-the-badge&logo=githubpages&logoColor=white" alt="Open the converter"></a>
 </p>
 
 <p align="center">
@@ -24,7 +24,7 @@ and it keeps working.
 
 1. **Get your file from Qualtrics.** Open the survey, click **Tools**, then **Import/Export**, then **Export survey**.
    A file ending in `.qsf` is saved on your computer.
-2. **Open it in the [converter](https://peterslijkhuis.github.io/QualtricsToLimeSurvey/).** Click the box and pick
+2. **Open it in the [converter](https://thebmslab.github.io/QualtricsToLimeSurvey/).** Click the box and pick
    the file, or drag the file onto it.
 3. **Choices.** Some things Qualtrics does have no exact LimeSurvey equivalent. For each one the page explains, in
    plain words, what Qualtrics does, why you need to choose, and what each option changes for respondents. The
