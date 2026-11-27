@@ -173,7 +173,8 @@
   .note .todo { grid-column: 1; margin-top: 8px; background: var(--warn-soft); border-radius: var(--radius-s); padding: 10px 14px; font-size: 15px; }
   .note .todo b { display: block; font-size: 13px; color: var(--warn); }
   .note .tick { grid-column: 2; grid-row: 1 / span 3; align-self: start; display: inline-flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 500; cursor: pointer; border: 1px solid var(--line-strong); border-radius: 999px; padding: 6px 14px 6px 10px; white-space: nowrap; }
-  .note .tick input { width: 20px; height: 20px; accent-color: var(--ok); margin: 0; }
+  .note .ack { grid-column: 1 / -1; grid-row: auto; justify-self: start; white-space: normal; border-radius: 12px; margin-top: 8px; }
+  .note .tick input { flex: none; width: 20px; height: 20px; accent-color: var(--ok); margin: 0; }
   .note.ticked .where, .note.ticked .what, .note.ticked .todo { opacity: .45; }
   .note.ticked .tick { color: var(--ok); border-color: var(--ok); }
   h2.sub { font-size: 19px; margin: 28px 4px 4px; letter-spacing: -.01em; }
@@ -474,7 +475,7 @@
 
     $('c-decisions').textContent = r.problems.length || '';
     $('c-questions').textContent = r.items.length;
-    const notes = r.notes.filter(n => !n.fix.startsWith('Your choice:'));
+    const notes = r.notes.filter(n => n.critical || !n.fix.startsWith('Your choice:'));
     $('c-notes').textContent = notes.filter(n => n.fix && !state.ticked.has(noteKey(n))).length || '';
 
     renderDecisions(r);
@@ -546,7 +547,7 @@
     const card = (n, tick) => {
       const k = noteKey(n), done = state.ticked.has(k);
       return `<div class="note${done ? ' ticked' : ''}"><div class="where">${esc(n.where)}</div><div class="what">${n.critical ? '<strong>Critical warning: </strong>' : ''}${esc(n.issue)}</div>
-        ${n.critical ? `<label class="tick"><input type="checkbox" data-ack="${esc(k)}"${state.acknowledged.has(k) ? ' checked' : ''}>I understand this change and will address it before data collection.</label>` : ''}
+        ${n.critical ? `<label class="tick ack"><input type="checkbox" data-ack="${esc(k)}"${state.acknowledged.has(k) ? ' checked' : ''}>I understand this change and will address it before data collection.</label>` : ''}
         ${tick ? `<div class="todo"><b>${/^If /.test(n.fix) ? 'Only needed if this matters for your survey' : 'What to do in LimeSurvey'}</b>${esc(n.fix)}</div><label class="tick"><input type="checkbox" data-note="${esc(k)}"${done ? ' checked' : ''}>${done ? 'Done' : 'Mark as done'}</label>` : ''}</div>`;
     };
     const left = todo.filter(n => !state.ticked.has(noteKey(n))).length;
@@ -700,7 +701,7 @@
     if (!b) return;
     if (b.dataset.todo === 'save') saveTodo();
     if (b.dataset.todo === 'print') { $('done').close(); state.tab = 'notes'; render(); print(); }
-    if (b.dataset.go) { b.closest('dialog')?.close(); state.tab = b.dataset.go; render(); window.scrollTo(0, 0); }
+    if (b.dataset.go) { b.closest('dialog')?.close(); state.tab = b.dataset.go; render(); window.scrollTo(0, 0); if (b.id === 'status' && state.tab === 'notes') document.querySelector('[data-ack]:not(:checked)')?.focus(); }
     if (b.hasAttribute('data-close')) b.closest('dialog').close();
     if (b.hasAttribute('data-settings')) {
       for (const k of ['theme', 'size']) document.querySelector(`input[name="${k}"][value="${settings[k]}"]`).checked = true;
