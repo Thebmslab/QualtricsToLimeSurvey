@@ -219,15 +219,15 @@ class Converter {
     const subset = Math.min(Number(f.SubSet) || n, n);
     const allBlocks = kids.every(k => k.Type === 'Block' || k.Type === 'Standard');
     const rg = allBlocks ? `rg${this.nextId++}` : '';
-    if (f.EvenPresentation && subset < n) this.note(this.flowName(f), 'Qualtrics shows each option to the same number of people. LimeSurvey picks at random, so the groups end up roughly equal, not exactly equal.', 'If the groups must be exactly equal, set up quotas in LimeSurvey (Survey settings, Quotas).');
+    if (f.EvenPresentation && subset < n) this.note(this.flowName(f), 'Qualtrics shows each option to the same number of people. LimeSurvey picks at random, so the groups end up roughly equal, not exactly equal.', 'If balanced assignment is essential, configure and validate a server-side allocation mechanism before collecting data. Quotas alone do not guarantee balanced assignment.');
     if (!allBlocks && subset >= n && kids.length > 1) this.note(this.flowName(f), 'The items in this randomizer that are not blocks (such as saving hidden values) now always run in the same order.');
     if (subset >= n) return this.walk(kids, conds, rg);
     // Pick `subset` of n children: every child draws a random number once; a child is shown when fewer
-    // than `subset` other children drew a lower number.
+    // than `subset` other children drew a lower number, breaking ties by original index.
     const names = kids.map((_, i) => this.varName(`rnd${f.FlowID.replace(/\W/g, '')}x${i + 1}`));
     for (const v of names) this.assign(v, `if(is_empty(${v}.NAOK), rand(1, 1000000), ${v}.NAOK)`, conds);
     kids.forEach((k, i) => {
-      const rank = names.filter((_, j) => j !== i).map(o => `(${o}.NAOK < ${names[i]}.NAOK)`).join(' + ');
+      const rank = names.map((o, j) => j === i ? null : `(${o}.NAOK ${j < i ? '<=' : '<'} ${names[i]}.NAOK)`).filter(Boolean).join(' + ');
       this.walk([k], [...conds, { expr: `(${rank}) < ${subset}` }], rg);
     });
   }
