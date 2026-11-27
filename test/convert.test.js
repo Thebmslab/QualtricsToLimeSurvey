@@ -121,3 +121,34 @@ test('external media are inventoried without fetching files', () => {
   const media = r.notes.filter(n => n.where === 'External media');
   for (const name of ['stimulus.png', 'clip.mp3', 'info.pdf']) assert.ok(media.some(n => n.issue.includes(name)), name);
 });
+
+test('invalid randomizer selection counts block export rather than silently changing the design', () => {
+  for (const count of [-1, 0, 1.5, 999, 'invalid']) {
+    const qsf = JSON.parse(fixture('kitchen-sink.qsf'));
+    const flow = qsf.SurveyElements.find(e => e.Element === 'FL').Payload.Flow;
+    const randomizer = flow.find(f => f.Type === 'BlockRandomizer');
+    assert.ok(randomizer);
+    randomizer.SubSet = count;
+    const r = convert(qsf);
+    assert.equal(r.lss, '');
+    assert.ok(r.problems.some(p => p.issue.includes('invalid number')));
+  }
+});
+
+test('decimal precision loss is a critical warning', () => {
+  const qsf = JSON.parse(fixture('fully-convertible.qsf'));
+  const q = qsf.SurveyElements.find(e => e.Element === 'SQ');
+  Object.assign(q.Payload, { QuestionType: 'TE', Selector: 'SL', Validation: { Settings: { Type: 'ContentType', ContentType: 'ValidNumber', ValidNumber: { Min: 1, Max: 10, NumDecimals: 2 } } } });
+  const r = convert(qsf);
+  assert.ok(r.notes.some(n => n.critical && n.issue.includes('decimal precision')));
+});
+
+test('unmapped required totals and partial choice randomization are critical warnings', () => {
+  const qsf = JSON.parse(fixture('fully-convertible.qsf'));
+  const q = qsf.SurveyElements.find(e => e.Element === 'SQ');
+  q.Payload.Validation = { Settings: { Type: 'MustTotal' } };
+  q.Payload.Randomization = { Type: 'Advanced' };
+  const r = convert(qsf);
+  assert.ok(r.notes.some(n => n.critical && n.issue.includes('required answer total')));
+  assert.ok(r.notes.some(n => n.critical && n.issue.includes('shuffled only some')));
+});

@@ -185,3 +185,7 @@ Every sample in `test/fixtures` was imported into LimeSurvey 6.17 with no import
 syntax errors, and `kitchen-sink.qsf` was answered through in the browser to confirm logic, branches, loops,
 randomizers, piping and embedded data behave as in Qualtrics. `households.qsf` comes from
 [JHUCities/qretools](https://github.com/JHUCities/qretools) (MIT licence).
+
+### Randomization and answer validation checks
+
+Invalid randomizer selection counts block export instead of silently selecting a different number of elements. Partial choice randomization, missing required totals and unsupported decimal precision rules produce critical review warnings. Date and format checks can also require manual verification. These checks do not implement balanced allocation across respondents or establish behavioural equivalence in LimeSurvey. Test the imported survey before collecting data.
