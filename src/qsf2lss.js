@@ -226,7 +226,13 @@ class Converter {
   randomizer(f, conds) {
     const kids = f.Flow || [];
     const n = kids.length;
-    const subset = Math.min(Number(f.SubSet) || n, n);
+    const rawSubset = f.SubSet;
+    const subset = rawSubset === undefined || rawSubset === null || rawSubset === '' ? n : Number(rawSubset);
+    if (!Number.isInteger(subset) || subset < 0 || subset > n || (subset === 0 && n > 0)) {
+      this.problem(this.flowName(f), 'The randomizer has an invalid number of items to select.', 'Check the number of selected elements in Qualtrics and export again.');
+      return;
+    }
+    if (n === 0) return;
     const allBlocks = kids.every(k => k.Type === 'Block' || k.Type === 'Standard');
     const rg = allBlocks ? `rg${this.nextId++}` : '';
     if (f.EvenPresentation && subset < n) this.note(this.flowName(f), 'Qualtrics shows each option to the same number of people. LimeSurvey picks at random, so the groups end up roughly equal, not exactly equal.', 'If balanced assignment is essential, configure and validate a server-side allocation mechanism before collecting data. Quotas alone do not guarantee balanced assignment.', true);
@@ -234,7 +240,8 @@ class Converter {
     if (subset >= n) return this.walk(kids, conds, rg);
     // Pick `subset` of n children: every child draws a random number once; a child is shown when fewer
     // than `subset` other children drew a lower number, breaking ties by original index.
-    const names = kids.map((_, i) => this.varName(`rnd${f.FlowID.replace(/\W/g, '')}x${i + 1}`));
+    const randomizerId = String(f.FlowID || `generated${this.nextId++}`).replace(/\W/g, '');
+    const names = kids.map((_, i) => this.varName(`rnd${randomizerId}x${i + 1}`));
     for (const v of names) this.assign(v, `if(is_empty(${v}.NAOK), rand(1, 1000000), ${v}.NAOK)`, conds);
     kids.forEach((k, i) => {
       const rank = names.map((o, j) => j === i ? null : `(${o}.NAOK ${j < i ? '<=' : '<'} ${names[i]}.NAOK)`).filter(Boolean).join(' + ');
@@ -792,12 +799,20 @@ class Converter {
           if (v.Min !== undefined && v.Min !== '') q.attrs.min_num_value_n = v.Min;
           if (v.Max !== undefined && v.Max !== '') q.attrs.max_num_value_n = v.Max;
           if (String(v.NumDecimals) === '0') q.attrs.num_value_int_only = 1;
-        } else q.attrs.numbers_only = 1;
+        } else {
+          q.attrs.numbers_only = 1;
+          this.note(q.where, 'Numeric validation on this question type may not preserve the original limits or decimal rules.', 'Test non-numeric input, both range boundaries and decimal values in LimeSurvey.', true);
+        }
+        if (v.NumDecimals !== undefined && v.NumDecimals !== '' && String(v.NumDecimals) !== '0') this.note(q.where, 'The original decimal precision constraint is not reproduced exactly.', 'Configure and test decimal precision in LimeSurvey before collecting data.', true);
         return;
       }
-      if (ct === 'ValidDate') return;
+      if (ct === 'ValidDate') {
+        if (q.type !== 'D') this.note(q.where, 'The date check is not converted to a date input on this question type.', 'Configure and test date validation in LimeSurvey.', true);
+        else this.note(q.where, 'The date input uses a fixed month/day/year format. Original date restrictions may differ.', 'Verify the date format and any allowed date range in LimeSurvey.');
+        return;
+      }
       const re = { ValidEmail: '/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/', ValidUSPhone: '/^\\(?\\d{3}\\)?[-. ]?\\d{3}[-. ]?\\d{4}$/', ValidPhone: '/^[+0-9 ()./-]{6,}$/', ValidUSZip: '/^\\d{5}(-\\d{4})?$/', ValidZip: '/^[A-Za-z0-9 -]{3,10}$/', ValidTextOnly: '/^[^0-9]*$/', ValidUSState: '/^[A-Za-z]{2}$/' }[ct];
-      if (re) { q.preg = re; return; }
+      if (re) { q.preg = re; this.note(q.where, 'The original answer format check is approximated by a regular expression.', 'Test accepted and rejected values in LimeSurvey before collecting data.'); return; }
       return this.problem(q.where, 'This text box checks the answer format in a way LimeSurvey does not know.', 'In Qualtrics, change the answer check to email, number, phone, postcode, date or text only.', [opt('drop', 'Accept any text', 'Respondents can type anything; you may get answers in the wrong format.')], { qualtrics: `Qualtrics only accepts answers in the format "${ct}".`, why: 'LimeSurvey has no ready-made check for this format.' });
     }
     if (type === 'MinChar' || type === 'MaxChar' || type === 'CharRange' || type === 'TextLength') {
@@ -809,7 +824,10 @@ class Converter {
       q.customValidation = s.CustomValidation;
       return;
     }
-    if (type === 'ChoicesTotal' || type === 'MustTotal') return;
+    if (type === 'ChoicesTotal' || type === 'MustTotal') {
+      if (q.attrs.equals_num_value === undefined || q.attrs.equals_num_value === '') this.note(q.where, 'The required answer total has not been converted.', 'Configure the required total in LimeSurvey and test answers above and below it.', true);
+      return;
+    }
     this.problem(q.where, 'This question checks the answer in a way LimeSurvey does not know.', 'Use force response, choice counts, content type or custom validation in Qualtrics.', [opt('drop', 'Leave the check out', 'Any answer is accepted.')], { qualtrics: `Qualtrics checks the answer with a "${type}" rule before respondents can continue.`, why: 'LimeSurvey has no equivalent check.' });
   }
 
@@ -820,7 +838,7 @@ class Converter {
     if (listType) q.attrs.answer_order = 'random';
     else if (q.type === 'M') q.attrs.subquestion_order = 'random';
     else q.attrs.random_order = 1;
-    if (r.Type !== 'All') this.note(q.where, 'Qualtrics shuffled only some of the choices. LimeSurvey shuffles all of them, so choices you kept in place (such as "Other") move too.');
+    if (r.Type !== 'All') this.note(q.where, 'Qualtrics shuffled only some of the choices. LimeSurvey shuffles all of them, so choices you kept in place (such as "Other") move too.', 'Verify the displayed choices and their order in LimeSurvey; rebuild the original selection rules if necessary.', true);
   }
 
   // ---------- expressions (second pass, all questions known) ----------
