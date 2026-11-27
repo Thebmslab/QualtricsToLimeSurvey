@@ -126,6 +126,16 @@ class Converter {
     const lss = this.writeLss(groups);
     if (lss.includes('TOKEN:')) this.note('Contact details', 'The survey uses contact details from Qualtrics (name, email or external reference). LimeSurvey only knows these for people on a participant list.', 'In LimeSurvey, add a participant list (Survey participants) and send the invitations from there.');
     if (/qualtrics\.com\/(ControlPanel|CP)\/(Graphic|File)\.php/i.test(lss)) this.note('Images and files', 'Some images or files are still loaded from your Qualtrics account. They stop working when that account closes.', 'Download them from Qualtrics, upload them to LimeSurvey and replace the links.');
+    const media = new Set();
+    for (const tag of lss.matchAll(/<(img|audio|video|source|track|iframe|embed|object|a)\b[^>]*>/gi)) {
+      for (const attr of tag[0].matchAll(/\b(?:src|poster|data|href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi)) {
+        const url = (attr[1] || attr[2] || attr[3] || '').replace(/&amp;/g, '&');
+        if (!/^(https?:)?\/\//i.test(url)) continue;
+        if (tag[1].toLowerCase() === 'a' && !/\.(pdf|docx?|xlsx?|pptx?|zip|png|jpe?g|gif|svg|mp[34]|wav|webm)(?:[?#]|$)|\/(?:Graphic|File)\.php/i.test(url)) continue;
+        media.add(url);
+      }
+    }
+    for (const url of media) this.note('External media', `External resource: ${url}`, 'Verify access and permissions, and migrate the file to LimeSurvey if necessary. No file has been downloaded or copied automatically.');
     return {
       lss: this.problems.length ? '' : lss,
       problems: this.problems,
@@ -151,7 +161,7 @@ class Converter {
   }
   // A condition that cannot be converted: the user decides whether it counts as true or false.
   condProblem(where, issue, fix, explain = {}) { return this.problem(where, issue, fix, condOptions(where), { why: CANT_CHECK, ...explain }) === 'false' ? '0' : '1'; }
-  note(where, issue, fix = '') { add(this.notes, { where, issue, fix }); }
+  note(where, issue, fix = '', critical = false) { add(this.notes, { where, issue, fix, critical }); }
 
   // A readable name for a survey flow element, e.g. 'Randomizer 2 (blocks "Intro", "Main")'.
   flowName(f) {
@@ -183,7 +193,7 @@ class Converter {
           this.walk(f.Flow || [], conds, rgroup);
           break;
         case 'Authenticator':
-          this.note(this.flowName(f), 'In Qualtrics, respondents had to log in before these questions. In LimeSurvey, anyone with the survey link can answer them.', 'To require a login, add a participant list in LimeSurvey (Survey participants). Only people with an invitation code can then take part.');
+          this.note(this.flowName(f), 'In Qualtrics, respondents had to log in before these questions. In LimeSurvey, anyone with the survey link can answer them.', 'To require a login, add a participant list in LimeSurvey (Survey participants). Only people with an invitation code can then take part.', true);
           this.walk(f.Flow || [], conds, rgroup);
           break;
         case 'TableOfContents':
@@ -219,15 +229,15 @@ class Converter {
     const subset = Math.min(Number(f.SubSet) || n, n);
     const allBlocks = kids.every(k => k.Type === 'Block' || k.Type === 'Standard');
     const rg = allBlocks ? `rg${this.nextId++}` : '';
-    if (f.EvenPresentation && subset < n) this.note(this.flowName(f), 'Qualtrics shows each option to the same number of people. LimeSurvey picks at random, so the groups end up roughly equal, not exactly equal.', 'If the groups must be exactly equal, set up quotas in LimeSurvey (Survey settings, Quotas).');
+    if (f.EvenPresentation && subset < n) this.note(this.flowName(f), 'Qualtrics shows each option to the same number of people. LimeSurvey picks at random, so the groups end up roughly equal, not exactly equal.', 'If balanced assignment is essential, configure and validate a server-side allocation mechanism before collecting data. Quotas alone do not guarantee balanced assignment.', true);
     if (!allBlocks && subset >= n && kids.length > 1) this.note(this.flowName(f), 'The items in this randomizer that are not blocks (such as saving hidden values) now always run in the same order.');
     if (subset >= n) return this.walk(kids, conds, rg);
     // Pick `subset` of n children: every child draws a random number once; a child is shown when fewer
-    // than `subset` other children drew a lower number.
+    // than `subset` other children drew a lower number, breaking ties by original index.
     const names = kids.map((_, i) => this.varName(`rnd${f.FlowID.replace(/\W/g, '')}x${i + 1}`));
     for (const v of names) this.assign(v, `if(is_empty(${v}.NAOK), rand(1, 1000000), ${v}.NAOK)`, conds);
     kids.forEach((k, i) => {
-      const rank = names.filter((_, j) => j !== i).map(o => `(${o}.NAOK < ${names[i]}.NAOK)`).join(' + ');
+      const rank = names.map((o, j) => j === i ? null : `(${o}.NAOK ${j < i ? '<=' : '<'} ${names[i]}.NAOK)`).filter(Boolean).join(' + ');
       this.walk([k], [...conds, { expr: `(${rank}) < ${subset}` }], rg);
     });
   }
@@ -1258,8 +1268,8 @@ class Converter {
 
   surveyOptions() {
     const o = this.options;
-    if (o.SurveyProtection === 'ByInvitation') this.note('Survey access', 'In Qualtrics only invited people could take part. In LimeSurvey anyone with the link can, until you change it.', 'Add a participant list in LimeSurvey to make the survey invitation-only.');
-    if (o.PasswordProtection === 'Yes') this.note('Survey access', 'The survey password is not carried over.', 'Use a participant list with access codes in LimeSurvey instead.');
+    if (o.SurveyProtection === 'ByInvitation') this.note('Survey access', 'In Qualtrics only invited people could take part. In LimeSurvey anyone with the link can, until you change it.', 'Add a participant list in LimeSurvey to make the survey invitation-only.', true);
+    if (o.PasswordProtection === 'Yes') this.note('Survey access', 'The survey password is not carried over.', 'Use a participant list with access codes in LimeSurvey instead.', true);
     if (o.Header || o.Footer) this.note('Survey look', 'Your custom header and footer are not carried over.', 'Add them to your LimeSurvey theme (Themes, Theme options).');
     if (o.SurveyExpiration === 'on' || o.SurveyExpirationDate) this.note('Survey access', 'The date the survey closes is not carried over.', 'Set it in LimeSurvey under Publication & access, Expiry date.');
   }

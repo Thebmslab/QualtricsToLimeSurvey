@@ -28,11 +28,11 @@ and it keeps working.
    the file, or drag the file onto it.
 3. **Choices.** Some things Qualtrics does have no exact LimeSurvey equivalent. For each one the page explains, in
    plain words, what Qualtrics does, why you need to choose, and what each option changes for respondents. The
-   recommended option is picked for you, so you can download straight away; change any of them if you like. If you
+   recommended option is marked, but you must explicitly select each choice. If you
    would rather fix something in Qualtrics, each item also says what to change there.
 4. **Questions.** Switch a question off to leave it out, change its short name (used in your results), or choose
    whether people must answer it. **Survey** lets you change the title.
-5. **Download for LimeSurvey.** A window then shows where to click in LimeSurvey to import the `.lss` file.
+5. **Download for LimeSurvey.** Review and acknowledge critical warnings first. Use **Download report** to save detected differences, choices and follow-up actions. External media links are listed for review, but files are not transferred. A window then shows where to click in LimeSurvey to import the `.lss` file.
 6. **After import.** A to-do list of things to set up yourself in LimeSurvey (with where to click), and a list of
    things that were changed for you and need nothing from you. Tick each to-do off as you go, or save or print the
    list.
@@ -43,8 +43,7 @@ explains which file to pick instead.
 ### Settings
 
 The **Settings** button (top right) changes the look (same as your device, light or dark) and the text size
-(normal, large, extra large). You can also turn off **Answer the choices for me**, and **Remember my choices on this
-computer**. When that is on, opening the same survey again brings back your choices, question changes and ticked
+(normal, large, extra large). You can also turn off **Remember my choices on this computer**. When that is on, opening the same survey again brings back your choices, question changes and ticked
 to-dos. Only those are kept, in your browser; the survey file itself is never stored. **Forget everything I saved**
 removes them.
 

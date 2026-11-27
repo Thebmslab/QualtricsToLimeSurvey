@@ -32,6 +32,7 @@ test('kitchen sink converts every behaviour without problems', () => {
   has(lss, '<value><![CDATA[drinkfilter]]></value>');
   // randomizers: subset of 1, and all blocks in random order
   has(lss, '((rndFL14x2.NAOK < rndFL14x1.NAOK)) < 1');
+  has(lss, '((rndFL14x1.NAOK <= rndFL14x2.NAOK)) < 1');
   assert.equal((lss.match(/<randomization_group><!\[CDATA\[rg\d+\]\]>/g) || []).length, 4);
   // validation, translations, defaults
   has(lss, '<mandatory><![CDATA[Y]]></mandatory>');
@@ -100,4 +101,23 @@ test('a damaged export stays blocked whatever is chosen', () => {
   assert.equal(r.lss, '');
   assert.equal(r.problems.length, 2);
   assert.ok(r.problems.every(p => !p.options.length && p.fix));
+});
+
+test('access restrictions and balanced allocation produce critical warnings', () => {
+  const qsf = JSON.parse(fixture('fully-convertible.qsf'));
+  const options = qsf.SurveyElements.find(e => e.Element === 'SO');
+  options.Payload.SurveyProtection = 'ByInvitation';
+  options.Payload.PasswordProtection = 'Yes';
+  const r = convert(qsf);
+  assert.equal(r.notes.filter(n => n.where === 'Survey access' && n.critical).length, 2);
+  assert.ok(convert(fixture('kitchen-sink.qsf')).notes.some(n => n.critical && n.issue.includes('same number')));
+});
+
+test('external media are inventoried without fetching files', () => {
+  const qsf = JSON.parse(fixture('fully-convertible.qsf'));
+  const q = qsf.SurveyElements.find(e => e.Element === 'SQ');
+  q.Payload.QuestionText += '<img src="https://example.org/stimulus.png"><audio src="https://example.org/clip.mp3"></audio><a href="https://example.org/info.pdf">PDF</a>';
+  const r = convert(qsf);
+  const media = r.notes.filter(n => n.where === 'External media');
+  for (const name of ['stimulus.png', 'clip.mp3', 'info.pdf']) assert.ok(media.some(n => n.issue.includes(name)), name);
 });

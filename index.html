@@ -166,14 +166,15 @@
   .lbl { display: none; }
 
   /* Notes */
-  .note { padding: 18px 22px; border-top: 1px solid var(--line); display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 16px; }
+  .note { padding: 18px 22px; border-top: 1px solid var(--line); display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px 16px; }
   .note:first-child { border-top: 0; }
   .note .where { font-size: 13px; color: var(--faint); font-weight: 600; grid-column: 1; }
   .note .what { grid-column: 1; }
   .note .todo { grid-column: 1; margin-top: 8px; background: var(--warn-soft); border-radius: var(--radius-s); padding: 10px 14px; font-size: 15px; }
   .note .todo b { display: block; font-size: 13px; color: var(--warn); }
-  .note .tick { grid-column: 2; grid-row: 1 / span 3; align-self: start; display: inline-flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 500; cursor: pointer; border: 1px solid var(--line-strong); border-radius: 999px; padding: 6px 14px 6px 10px; white-space: nowrap; }
-  .note .tick input { width: 20px; height: 20px; accent-color: var(--ok); margin: 0; }
+  .note .tick { grid-column: 1; grid-row: auto; justify-self: start; align-self: start; display: inline-flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 500; cursor: pointer; border: 1px solid var(--line-strong); border-radius: 999px; padding: 6px 14px 6px 10px; white-space: normal; }
+  .note .ack { grid-column: 1 / -1; grid-row: auto; justify-self: start; white-space: normal; border-radius: 12px; margin-top: 8px; }
+  .note .tick input { flex: none; width: 20px; height: 20px; accent-color: var(--ok); margin: 0; }
   .note.ticked .where, .note.ticked .what, .note.ticked .todo { opacity: .45; }
   .note.ticked .tick { color: var(--ok); border-color: var(--ok); }
   h2.sub { font-size: 19px; margin: 28px 4px 4px; letter-spacing: -.01em; }
@@ -304,6 +305,7 @@
       <button id="status" class="pill" type="button" aria-live="polite"></button>
       <button class="icon-btn" type="button" data-settings aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>
       <button class="btn ghost" id="restart" type="button">Other file</button>
+      <button class="btn ghost" id="report" type="button">Download report</button>
       <button class="btn" id="export" type="button">Download for LimeSurvey</button>
     </div>
   </div>
@@ -316,7 +318,7 @@
     </div>
 
     <section class="panel" role="tabpanel" id="p-decisions" aria-labelledby="tab-decisions">
-      <div class="intro"><span>LimeSurvey cannot do everything Qualtrics does. For each item below, read what it does now in Qualtrics, then pick what should happen in LimeSurvey. Not sure? Pick the one marked Recommended.</span><button class="btn small ghost" id="suggest" type="button">Pick the recommended option for all</button></div>
+      <div class="intro"><span>LimeSurvey cannot do everything Qualtrics does. For each item below, read what it does now in Qualtrics, then pick what should happen in LimeSurvey. Not sure? Pick the one marked Recommended.</span></div>
       <div id="decisions"></div>
     </section>
 
@@ -360,7 +362,7 @@
         <label><input type="radio" name="size" value="larger">Extra large</label>
       </div>
     </div>
-    <div class="set"><label class="toggle"><span><b>Answer the choices for me</b><p>Picks the recommended option for every choice, so you can download straight away. You can still look at each one and change it.</p></span><span class="switch"><input type="checkbox" id="s-auto"><span></span></span></label></div>
+    
     <div class="set"><label class="toggle"><span><b>Remember my choices on this computer</b><p>When you open the same survey again, your choices, question changes and ticked to-dos come back. Only your choices are kept, in this browser. The survey file itself is never stored.</p></span><span class="switch"><input type="checkbox" id="s-remember"><span></span></span></label>
       <div class="actions"><button class="btn small plain" type="button" id="forget">Forget everything I saved</button></div>
     </div>
@@ -389,7 +391,7 @@
 
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const state = { name: '', text: '', key: '', choices: {}, edits: {}, title: '', tab: 'decisions', result: null, order: [], ticked: new Set(), auto: new Set() };
+  const state = { name: '', text: '', key: '', choices: {}, edits: {}, title: '', tab: 'decisions', result: null, order: [], ticked: new Set(), auto: new Set(), acknowledged: new Set() };
 
   // Browser storage can be blocked (private windows, strict settings); the page then simply does not remember.
   const store = {
@@ -425,8 +427,10 @@
       let key = file.name;
       try { key = JSON.parse(text.replace(/^\uFEFF/, '')).SurveyEntry.SurveyID || key; } catch {}
       const saved = settings.remember ? store.get('q2l:' + key) : null;
-      Object.assign(state, { name: file.name, text, key: 'q2l:' + key, choices: {}, edits: {}, title: '', order: [], ticked: new Set(), auto: new Set() });
+      Object.assign(state, { name: file.name, text, key: 'q2l:' + key, choices: {}, edits: {}, title: '', order: [], ticked: new Set(), auto: new Set(), acknowledged: new Set() });
       if (saved) Object.assign(state, { choices: saved.choices || {}, edits: saved.edits || {}, title: saved.title || '', ticked: new Set(saved.ticked || []), auto: new Set(saved.auto || []) });
+      for (const id of state.auto) delete state.choices[id];
+      state.auto.clear();
       $('title').value = state.title;
       $('error').classList.add('hidden');
       $('start').classList.add('hidden');
@@ -448,13 +452,6 @@
   function run() {
     const opts = () => ({ choices: state.choices, edits: state.edits, title: state.title });
     state.result = convert(state.text, opts());
-    // Answering one choice can bring up another, so keep picking until nothing new appears.
-    for (let i = 0; settings.auto && i < 5; i++) {
-      const open = state.result.problems.filter(p => p.options.length && !state.choices[p.id]);
-      if (!open.length) break;
-      for (const p of open) { state.choices[p.id] = p.options[0].key; state.auto.add(p.id); }
-      state.result = convert(state.text, opts());
-    }
     save();
     render();
   }
@@ -472,13 +469,15 @@
     else if (open.length) { st.className = 'pill todo'; st.textContent = `${open.length} choice${open.length > 1 ? 's' : ''} to make`; st.dataset.go = 'decisions'; }
     else { st.className = 'pill ok'; st.textContent = picked ? `Ready to download (${picked} picked for you)` : 'Ready to download'; st.dataset.go = picked ? 'decisions' : 'notes'; }
     $('export').title = manual.length ? 'First fix the items marked on the Choices tab in Qualtrics' : '';
-    $('export').disabled = !r.lss;
+    const pendingCritical = r.notes.filter(n => n.critical && !state.acknowledged.has(noteKey(n)));
+    if (!manual.length && !open.length && pendingCritical.length) { st.className = 'pill bad'; st.textContent = `${pendingCritical.length} critical warning(s) to review`; st.dataset.go = 'notes'; }
+    $('export').disabled = !r.lss || pendingCritical.length > 0;
 
     $('c-decisions').textContent = r.problems.length || '';
     $('c-questions').textContent = r.items.length;
-    const notes = r.notes.filter(n => !n.fix.startsWith('Your choice:'));
+    const notes = r.notes.filter(n => n.critical || !n.fix.startsWith('Your choice:'));
     $('c-notes').textContent = notes.filter(n => n.fix && !state.ticked.has(noteKey(n))).length || '';
-    $('suggest').classList.toggle('hidden', !open.length);
+
     renderDecisions(r);
     renderQuestions(r);
     renderNotes(notes);
@@ -502,7 +501,7 @@
     // Items only Qualtrics can fix come first: they block the download whatever is chosen.
     list.sort((a, b) => !b.options.length - !a.options.length || state.order.indexOf(a.id) - state.order.indexOf(b.id));
     if (!list.length) {
-      el.innerHTML = `<div class="card empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.6 2.5L16 9.5"/></svg><b>Nothing to decide</b>Everything in this survey has a LimeSurvey equivalent.</div>`;
+      el.innerHTML = `<div class="card empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.6 2.5L16 9.5"/></svg><b>Nothing to decide</b>No conversion choices were detected. Check the After import tab and test the imported survey.</div>`;
       return;
     }
     el.innerHTML = list.map(p => `
@@ -547,14 +546,15 @@
     const todo = notes.filter(n => n.fix), info = notes.filter(n => !n.fix);
     const card = (n, tick) => {
       const k = noteKey(n), done = state.ticked.has(k);
-      return `<div class="note${done ? ' ticked' : ''}"><div class="where">${esc(n.where)}</div><div class="what">${esc(n.issue)}</div>
-        ${tick ? `<div class="todo"><b>${/^If /.test(n.fix) ? 'Only needed if this matters for your survey' : 'What to do in LimeSurvey'}</b>${esc(n.fix)}</div><label class="tick"><input type="checkbox" data-note="${esc(k)}"${done ? ' checked' : ''}>${done ? 'Done' : 'Mark as done'}</label>` : ''}</div>`;
+      return `<div class="note${done ? ' ticked' : ''}"><div class="where">${esc(n.where)}</div><div class="what">${n.critical ? '<strong>Critical warning: </strong>' : ''}${esc(n.issue)}</div>
+        ${n.critical ? `<label class="tick ack"><input type="checkbox" data-ack="${state.result.notes.indexOf(n)}"${state.acknowledged.has(k) ? ' checked' : ''}>I understand this critical warning and will address it before data collection.</label>` : ''}
+        ${tick ? `<div class="todo"><b>${/^If /.test(n.fix) ? 'Only needed if this matters for your survey' : 'What to do in LimeSurvey'}</b>${esc(n.fix)}</div><label class="tick"><input type="checkbox" data-note="${state.result.notes.indexOf(n)}"${done ? ' checked' : ''}>${done ? 'Done' : 'Mark as done'}</label>` : ''}</div>`;
     };
     const left = todo.filter(n => !state.ticked.has(noteKey(n))).length;
     $('notes').innerHTML = !notes.length
-      ? `<div class="card empty"><b>Nothing to do after importing</b>Everything came across as it is in Qualtrics.</div>`
+      ? `<div class="card empty"><b>Nothing to do after importing</b>No differences were detected. Test the imported survey before collecting data.</div>`
       : (todo.length ? `<h2 class="sub">To do in LimeSurvey after importing${left ? ` (${left} left)` : ', all done'}</h2>
-          <p class="subnote">These parts did not come across completely. Your survey still works, but you set them up yourself in LimeSurvey, after importing the file. Tick each one off when it is done. You can also save or print this list.</p>
+          <p class="subnote">These parts did not come across completely. Set these up in LimeSurvey after importing the file and verify the survey before collecting data. Tick each one off when it is done. You can also save or print this list.</p>
           <div class="actions todo-actions">${todoButtons()}</div>
           <div class="card">${todo.map(n => card(n, true)).join('')}</div>` : '')
         + (info.length ? `<h2 class="sub">Changed for you, nothing to do</h2>
@@ -587,17 +587,6 @@
     state.auto.delete(e.target.name);
     rerun();
   });
-  $('suggest').addEventListener('click', () => {
-    // Resolving one problem can reveal another, so repeat until nothing new appears.
-    for (let i = 0; i < 5; i++) {
-      const open = state.result.problems.filter(p => p.options.length && !state.choices[p.id]);
-      if (!open.length) break;
-      for (const p of open) { state.choices[p.id] = p.options[0].key; state.auto.add(p.id); }
-      run();
-    }
-    toast('The recommended option is picked everywhere. You can still change each one.');
-  });
-
   let typing;
   $('questions').addEventListener('input', e => {
     const row = e.target.closest('[data-id]');
@@ -612,14 +601,23 @@
   });
   $('search').addEventListener('input', () => renderQuestions(state.result));
   $('notes').addEventListener('change', e => {
-    const k = e.target.dataset.note;
+    const ackIndex = e.target.dataset.ack;
+    const ack = ackIndex === undefined ? undefined : noteKey(state.result.notes[Number(ackIndex)]);
+    if (ack !== undefined) {
+      if (e.target.checked) state.acknowledged.add(ack); else state.acknowledged.delete(ack);
+      render();
+      document.querySelector(`[data-ack="${CSS.escape(ackIndex)}"]`)?.focus();
+      return;
+    }
+    const noteIndex = e.target.dataset.note;
+    const k = noteIndex === undefined ? undefined : noteKey(state.result.notes[Number(noteIndex)]);
     if (k === undefined) return;
     if (e.target.checked) state.ticked.add(k); else state.ticked.delete(k);
     save();
     const y = window.scrollY;
     render();
     window.scrollTo(0, y);
-    const again = document.querySelector(`[data-note="${CSS.escape(k)}"]`);
+    const again = document.querySelector(`[data-note="${CSS.escape(noteIndex)}"]`);
     if (again) again.focus();
   });
   $('title').addEventListener('input', e => { state.title = e.target.value; clearTimeout(typing); typing = setTimeout(rerun, 350); });
@@ -636,7 +634,7 @@
 
   $('export').addEventListener('click', () => {
     const r = state.result;
-    if (!r.lss) return;
+    if (!r.lss || r.notes.some(n => n.critical && !state.acknowledged.has(noteKey(n)))) return;
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([r.lss], { type: 'application/xml' }));
     a.download = state.name.replace(/\.qsf$/i, '') + '.lss';
@@ -659,16 +657,57 @@
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
+  function buildReport(r, name, title, auto, ticked) {
+    const lines = ['QUALTRICS TO LIMESURVEY — CONVERSION REPORT',
+      `Source: ${name}`, `Survey: ${title}`, `Generated: ${new Date().toISOString()}`,
+      `Status: ${r.lss ? 'LSS available (not independently validated)' : 'Conversion incomplete'}`,
+      `Source question entries: ${r.items.length}`, `Included entries: ${r.items.filter(i => !i.skip).length}`,
+      `LimeSurvey groups: ${r.stats.groups}`, `Languages: ${r.stats.languages.join(', ')}`,
+      '', 'This report records detected differences, not proof of equivalent survey behaviour.',
+      'Test the imported survey before collecting data.', '', 'UNRESOLVED ITEMS'];
+    if (!r.problems.length) lines.push('None detected.');
+    for (const p of r.problems) {
+      lines.push(`[${p.options.length ? 'Choice required' : 'Blocked'}] ${p.where}: ${p.issue}`);
+      if (p.fix) lines.push(`  Suggested action: ${p.fix}`);
+      for (const o of p.options) lines.push(`  Option: ${o.label}${o.impact ? ' — ' + o.impact : ''}`);
+    }
+    lines.push('', 'CONVERSION CHOICES');
+    if (!r.decided.length) lines.push('None.');
+    for (const p of r.decided) {
+      const o = p.options.find(o => o.key === p.chosen);
+      lines.push(`${p.where}: ${p.issue}`, `  Selected (${auto.has(p.id) ? 'automatic' : 'manual'}): ${o?.label || p.chosen}`);
+      if (o?.impact) lines.push(`  Impact: ${o.impact}`);
+    }
+    lines.push('', 'NOTES AND AFTER-IMPORT ACTIONS');
+    if (!r.notes.length) lines.push('None detected.');
+    for (const n of r.notes) {
+      const status = !n.fix || n.fix.startsWith('Your choice:') ? 'Info' : ticked.has(noteKey(n)) ? 'Marked done' : 'Open';
+      lines.push(`[${status}${n.critical ? (state.acknowledged.has(noteKey(n)) ? '; critical acknowledged' : '; critical not acknowledged') : ''}] ${n.where}: ${n.issue}`);
+      if (n.fix) lines.push(`  ${n.fix}`);
+    }
+    lines.push('', 'QUESTION INVENTORY');
+    for (const i of r.items) lines.push(`${i.skip ? '[Excluded]' : '[Included]'} ${i.block} / ${i.code} (${i.type})${i.newCode ? ' — requested code: ' + i.newCode : ''}${i.newMandatory ? ' — requested answer setting: ' + i.newMandatory : ''}`);
+    return lines.join('\r\n') + '\r\n';
+  }
+  $('report').addEventListener('click', () => {
+    const report = buildReport(state.result, state.name, state.title || titleDefault(), state.auto, state.ticked);
+    const a = document.createElement('a');
+    const url = URL.createObjectURL(new Blob([report], { type: 'text/plain;charset=utf-8' }));
+    a.href = url;
+    a.download = state.name.replace(/\.qsf$/i, '') + ' - conversion report.txt';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
   document.addEventListener('click', e => {
     const b = e.target.closest('button');
     if (!b) return;
     if (b.dataset.todo === 'save') saveTodo();
     if (b.dataset.todo === 'print') { $('done').close(); state.tab = 'notes'; render(); print(); }
-    if (b.dataset.go) { b.closest('dialog')?.close(); state.tab = b.dataset.go; render(); window.scrollTo(0, 0); }
+    if (b.dataset.go) { b.closest('dialog')?.close(); state.tab = b.dataset.go; render(); window.scrollTo(0, 0); if (b.id === 'status' && state.tab === 'notes') document.querySelector('[data-ack]:not(:checked)')?.focus(); }
     if (b.hasAttribute('data-close')) b.closest('dialog').close();
     if (b.hasAttribute('data-settings')) {
       for (const k of ['theme', 'size']) document.querySelector(`input[name="${k}"][value="${settings[k]}"]`).checked = true;
-      $('s-auto').checked = settings.auto;
+
       $('s-remember').checked = settings.remember;
       $('settings').showModal();
     }
@@ -676,10 +715,10 @@
   $('settings').addEventListener('change', e => {
     const t = e.target;
     if (t.name === 'theme' || t.name === 'size') settings[t.name] = t.value;
-    if (t.id === 's-auto') settings.auto = t.checked;
+
     if (t.id === 's-remember') { settings.remember = t.checked; if (!t.checked) store.clear(); }
     applySettings();
-    if (t.id === 's-auto' && state.result) run();
+
     if (t.id === 's-remember' && t.checked) save();
   });
   $('forget').addEventListener('click', () => { store.clear(); store.set('q2l-settings', settings); toast('Everything this page saved on this computer is gone. Your settings are kept.'); });
